@@ -1,12 +1,10 @@
 import sys
 from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QLineEdit, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget, QStatusBar
 from PyQt5.QtGui import QIcon
-from difflib import SequenceMatcher
 import pandas as pd
-import sqlite3
 import os
 
-#pyinstaller --onefile --windowed --icon "C:\Users\CourtUser\Desktop\release\RussianPostIndexSearch\index.png" --add-data "C:\Users\CourtUser\Desktop\release\RussianPostIndexSearch\index.png;." --add-data "C:/PIndx10.db;." RussianPostIndexes.py
+#pyinstaller --onefile --windowed --icon "C:\Users\CourtUser\Desktop\release\RussianPostIndexSearch\index.png" --add-data "C:\Users\CourtUser\Desktop\release\RussianPostIndexSearch\index.png;." --add-data "C:\Users\CourtUser\Desktop\release\RussianPostIndexSearch\PIndx16.csv;." RussianPostIndexes.py
 
 def resource_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller """
@@ -19,13 +17,24 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 
-def similarity_score(a, b):
-    return SequenceMatcher(None, a, b).ratio()
+def filter_dataframe(df, search_strings):
+    search_strings = search_strings.split(' ')
+    # Создаем переменную для хранения логических условий для каждой строки
+    conditions = None
 
+    # Проходим по каждой строке поисковых строк
+    for search_string in search_strings:
+        # Создаем логическое условие для текущей строки и объединяем его с предыдущими условиями
+        if conditions is None:
+            conditions = df['Location'].str.contains(search_string.upper())
+        else:
+            conditions &= df['Location'].str.contains(search_string.upper())
 
-def filter_dataframe(df, search_string):
-    filtered_df = df[df['opsname'].str.contains(search_string.upper())]
-    return filtered_df[['index','opsname', 'area', 'region', 'autonom']]
+    # Фильтруем DataFrame с использованием объединенных условий
+    filtered_df = df[conditions]
+
+    # Возвращаем нужные столбцы
+    return filtered_df[['index','Location', 'opsname', 'opssubm']]
 
 
 class MainWindow(QMainWindow):
@@ -33,15 +42,15 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowIcon(QIcon(resource_path('index.png')))
         self.setWindowTitle("Поиск индекса по населенному пункту")
-        self.setGeometry(100, 100, 600, 400)
+        self.setGeometry(100, 100, 800, 450)
 
-        self.search_label = QLabel("Начните вводить название населенного пункта:")
+        self.search_label = QLabel("Начните вводить название населенного пункта, несколько слов разделяйте пробелами:")
         self.search_input = QLineEdit()
         self.search_input.textChanged.connect(self.handle_search)
         self.statusbar = QStatusBar(self)
         self.table = QTableWidget()
-        self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(["Индекс", "ОПС", "Район", "Регион", "Автоном"])
+        self.table.setColumnCount(4)
+        self.table.setHorizontalHeaderLabels(["Индекс", "Расположение","Вышестоящий", "ОПС"])
 
         layout = QVBoxLayout()
         layout.addWidget(self.search_label)
@@ -49,7 +58,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.table)
         layout.setContentsMargins(3,3,3,3)
         self.linkLabel = QLabel()
-        self.linkLabel.setText('БД PIndx10 от 06.06.2023. Разработка: Краснокамский гс. <a href="https://github.com/dimulyaPlay">github.com/DimulyaPlay</a>')
+        self.linkLabel.setText('БД PIndx16 от 06.09.2023. Разработка: Краснокамский гс. <a href="https://github.com/dimulyaPlay">github.com/DimulyaPlay</a>')
         self.linkLabel.setOpenExternalLinks(True)  # Открывать ссылку во внешнем браузере
         self.statusbar.addWidget(self.linkLabel)
         widget = QWidget()
@@ -59,7 +68,7 @@ class MainWindow(QMainWindow):
         self.data_df = None
 
     def handle_search(self, search_string):
-        if len(search_string) > 3:
+        if len(search_string) > 2:
             filtered_df = filter_dataframe(self.data_df, search_string)
             self.populate_table(filtered_df)
 
@@ -76,9 +85,7 @@ class MainWindow(QMainWindow):
 
 if __name__ == "__main__":
     # Load your data into the dataframe
-    con = sqlite3.connect(resource_path('PIndx10.db'))
-    df = pd.read_sql('SELECT "index", region, autonom, area, opsname FROM PIndx10', con=con)
-
+    df = pd.read_csv(resource_path('PIndx16.csv'))
     app = QApplication(sys.argv)
     window = MainWindow()
     window.data_df = df
